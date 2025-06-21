@@ -30,7 +30,7 @@
     </form>
     <div class="notes-label">Your Notes</div>
     <textarea id="notes" placeholder="Write your notes here..."></textarea>
-    <div class="footer">Powered by <a href="https://huggingface.co" target="_blank">HuggingFace</a> | Notes saved locally</div>
+    <div class="footer">Powered by <a href="https://huggingface.co" target="_blank">HuggingFace</a> via your secure backend | Notes saved locally</div>
   </div>
   <script>
     const chat = document.getElementById('chat');
@@ -38,13 +38,13 @@
     const questionInput = document.getElementById('question');
     const askBtn = document.getElementById('ask');
     const notes = document.getElementById('notes');
-    
+
     // Load notes from localStorage
     notes.value = localStorage.getItem('study_notes') || '';
     notes.addEventListener('input', () => {
       localStorage.setItem('study_notes', notes.value);
     });
-    
+
     function addMsg(text, who) {
       const div = document.createElement('div');
       div.className = 'msg ' + who;
@@ -53,66 +53,41 @@
       chat.scrollTop = chat.scrollHeight;
       return div;
     }
-    
+
     async function askAI(question) {
       addMsg(question, 'user');
       askBtn.disabled = true;
       const spinner = addMsg('Thinking...', 'ai');
       try {
-        const res = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
+        // Call your secure backend endpoint on Vercel that injects the HF token
+        const res = await fetch('/api/ask', {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer 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' // TODO: move token to secure backend
-          },
-          body: JSON.stringify({
-            inputs: `[INST] ${question} [/INST]`,
-            parameters: {
-              max_new_tokens: 500,
-              temperature: 0.7,
-              top_p: 0.95,
-              return_full_text: false
-            },
-            wait_for_model: true
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
         });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (spinner.parentNode) spinner.remove();
 
         if (data.error) {
-          const errMsg = data.error.toLowerCase();
-          if (errMsg.includes('loading')) {
-            addMsg('Model is starting up, please try again in 10 seconds...', 'ai');
-          } else if (errMsg.match(/\brate\s*limit\b/) || res.status === 429) {
-            addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
-          } else {
-            addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
-          }
+          const err = data.error.toLowerCase();
+          if (err.includes('loading')) addMsg('Model is starting up, please try again in 10 seconds...', 'ai');
+          else if (err.match(/\brate\s*limit\b/) || res.status === 429) addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
+          else addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
         } else {
-          let text;
-          if (Array.isArray(data) && data[0]?.generated_text) {
-            text = data[0].generated_text;
-          } else if (data.generated_text) {
-            text = data.generated_text;
-          }
-          if (!text) {
-            addMsg('No response received. Please try rephrasing your question.', 'ai');
-          } else {
-            addMsg(text.trim(), 'ai');
-          }
+          const text = (Array.isArray(data) ? data[0]?.generated_text : data.generated_text) || '';
+          if (!text) addMsg('No response received. Please try rephrasing your question.', 'ai');
+          else addMsg(text.trim(), 'ai');
         }
       } catch (error) {
-        console.error(error);
+        console.error('askAI error:', error);
         if (spinner.parentNode) spinner.remove();
-        addMsg('Sorry, there was an error connecting to the AI. Please try again later.', 'ai');
+        addMsg(`Error connecting to AI: ${error.message}`, 'ai');
       } finally {
         askBtn.disabled = false;
       }
     }
-    
+
     form.onsubmit = e => {
       e.preventDefault();
       const q = questionInput.value.trim();
