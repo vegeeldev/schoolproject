@@ -64,8 +64,7 @@
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            // Add your HuggingFace API token here for better rate limits
-            'Authorization': 'Bearer YOUR_HUGGINGFACE_TOKEN'
+            'Authorization': 'Bearer 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'
           },
           body: JSON.stringify({
             inputs: {
@@ -83,7 +82,7 @@
           if (data.error.includes('loading')) {
             addMsg('Model is warming up, please try again in 10-20 seconds...', 'ai');
           } else if (data.error.includes('rate')) {
-            addMsg('Too many requests. Please add your HuggingFace token for better access.', 'ai');
+            addMsg('Rate limit exceeded. Please wait a moment before trying again.', 'ai');
           } else {
             addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
           }
