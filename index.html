@@ -63,8 +63,7 @@
         const res = await fetch('https://api-inference.huggingface.co/models/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer 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'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             inputs: {
