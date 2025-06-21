@@ -59,9 +59,8 @@
       addMsg('Thinking...', 'ai');
       
       try {
-        // Use HuggingFace Inference API with a working model
-        // In the askAI function, replace the fetch URL with:
-        const res = await fetch('https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill', {
+        // Use HuggingFace Inference API with google/flan-t5-base model
+        const res = await fetch('https://api-inference.huggingface.co/models/google/flan-t5-base', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ inputs: question })
@@ -70,7 +69,6 @@
         let data = await res.json();
         chat.removeChild(chat.lastChild); // Remove 'Thinking...'
         
-        // Replace the error handling section with:
         if (data.error) {
           if (data.error.includes('loading')) {
             addMsg('AI model is loading. Please wait a moment and try again.', 'ai');
