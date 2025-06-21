@@ -1,146 +1,86 @@
-// File: pages/api/ask.js
-import fetch from 'node-fetch';
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const { question } = req.body;
-  if (!question) {
-    return res.status(400).json({ error: 'No question provided' });
-  }
-
-  try {
-    const hfRes = await fetch(
-      'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer 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`,
-        },
-        body: JSON.stringify({
-          inputs: `[INST] ${question} [/INST]`,
-          parameters: { max_new_tokens: 500, temperature: 0.7, top_p: 0.95, return_full_text: false },
-          wait_for_model: true,
-        }),
-      }
-    );
-
-    if (!hfRes.ok) {
-      const text = await hfRes.text();
-      return res
-        .status(hfRes.status)
-        .json({ error: `HuggingFace error (${hfRes.status}): ${text}` });
-    }
-
-    const data = await hfRes.json();
-    return res.status(200).json(data);
-  } catch (e) {
-    console.error('API /ask error:', e);
-    return res.status(500).json({ error: e.message });
-  }
-}
-
-
-<!-- File: public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Study Buddy - AI Q&A & Notes</title>
+  <title>QuizBuddy - AI Flashcards & Notes</title>
   <style>
-    body { font-family: sans-serif; background: #f7f7fa; margin: 0; padding: 0; }
-    .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 24px; }
-    h1 { font-size: 1.5em; margin-bottom: 0.5em; }
-    #chat { height: 220px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 10px; background: #fafbfc; margin-bottom: 1em; }
-    .msg { margin-bottom: 10px; }
-    .msg.user { color: #1a73e8; }
-    .msg.ai { color: #222; }
-    #question { width: 80%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
-    #ask { padding: 8px 16px; border: none; background: #1a73e8; color: #fff; border-radius: 4px; cursor: pointer; }
-    #ask:disabled { background: #aaa; }
-    #notes { width: 100%; min-height: 80px; border-radius: 4px; border: 1px solid #ddd; margin-top: 1em; padding: 8px; }
-    .notes-label { margin-top: 1.5em; font-weight: bold; }
-    .footer { text-align: center; color: #888; font-size: 0.9em; margin-top: 2em; }
+    body { font-family: sans-serif; background: #eef2f5; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 50px auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 32px; }
+    h1 { margin-bottom: 1em; font-size: 2em; text-align: center; }
+    #flashcard { border: 1px solid #ddd; border-radius: 8px; padding: 24px; text-align: center; font-size: 1.2em; min-height: 100px; margin-bottom: 1em; background: #fafbfd; }
+    .controls { display: flex; justify-content: center; gap: 16px; margin-bottom: 1.5em; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; }
+    #prev { background: #bbb; color: #fff; }
+    #next { background: #1a73e8; color: #fff; }
+    #notes { width: 100%; min-height: 80px; border: 1px solid #ddd; border-radius: 6px; padding: 12px; font-size: 1em; }
+    .notes-label { font-weight: bold; margin-top: 1em; display: block; }
+    .footer { text-align: center; color: #777; font-size: 0.9em; margin-top: 2em; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Study Buddy 🤖</h1>
-    <div id="chat"></div>
-    <form id="chatForm" autocomplete="off">
-      <input id="question" type="text" placeholder="Ask a study question..." required />
-      <button id="ask" type="submit">Ask</button>
-    </form>
-    <div class="notes-label">Your Notes</div>
-    <textarea id="notes" placeholder="Write your notes here..."></textarea>
-    <div class="footer">Powered by HuggingFace via your secure backend | Notes saved locally</div>
+    <h1>QuizBuddy 🎓</h1>
+    <div id="flashcard">Click "Generate" to get your first flashcard</div>
+    <div class="controls">
+      <button id="prev" disabled>Prev</button>
+      <button id="generate">Generate</button>
+      <button id="next" disabled>Next</button>
+    </div>
+    <label class="notes-label" for="notes">Your Notes</label>
+    <textarea id="notes" placeholder="Add notes here..."></textarea>
+    <div class="footer">Powered by HuggingFace | Notes saved locally</div>
   </div>
   <script>
-    const chat = document.getElementById('chat');
-    const form = document.getElementById('chatForm');
-    const questionInput = document.getElementById('question');
-    const askBtn = document.getElementById('ask');
+    const flashcardEl = document.getElementById('flashcard');
+    const generateBtn = document.getElementById('generate');
+    const prevBtn = document.getElementById('prev');
+    const nextBtn = document.getElementById('next');
     const notes = document.getElementById('notes');
 
-    // Load notes from localStorage
-    notes.value = localStorage.getItem('study_notes') || '';
+    let cards = [];
+    let index = -1;
+
+    // Load notes
+    notes.value = localStorage.getItem('quiz_notes') || '';
     notes.addEventListener('input', () => {
-      localStorage.setItem('study_notes', notes.value);
+      localStorage.setItem('quiz_notes', notes.value);
     });
 
-    function addMsg(text, who) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + who;
-      div.textContent = (who === 'user' ? 'You: ' : 'AI: ') + text;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-      return div;
+    function showCard(i) {
+      if (i < 0 || i >= cards.length) return;
+      flashcardEl.textContent = cards[i];
+      prevBtn.disabled = i === 0;
+      nextBtn.disabled = i === cards.length - 1;
     }
 
-    async function askAI(question) {
-      addMsg(question, 'user');
-      askBtn.disabled = true;
-      const spinner = addMsg('Thinking...', 'ai');
+    async function generateCards() {
+      generateBtn.disabled = true;
+      flashcardEl.textContent = 'Generating flashcards...';
       try {
-        const res = await fetch('/api/ask', {
+        const prompt = 'Generate 5 concise flashcard questions and answers on a random topic separated by "|"';
+        const res = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
+          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer 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'},
+          body: JSON.stringify({ inputs: `[INST] ${prompt} [/INST]`, parameters: { max_new_tokens: 200, temperature: 0.8 }, wait_for_model: true })
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (spinner.parentNode) spinner.remove();
-
-        if (data.error) {
-          const err = data.error.toLowerCase();
-          if (err.includes('loading')) addMsg('Model is starting up, please try again in 10 seconds...', 'ai');
-          else if (err.match(/\brate\s*limit\b/) || res.status === 429) addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
-          else addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
-        } else {
-          const text = (Array.isArray(data) ? data[0]?.generated_text : data.generated_text) || '';
-          if (!text) addMsg('No response received. Please try rephrasing your question.', 'ai');
-          else addMsg(text.trim(), 'ai');
-        }
-      } catch (error) {
-        console.error('askAI error:', error);
-        if (spinner.parentNode) spinner.remove();
-        addMsg(`Error connecting to AI: ${error.message}`, 'ai');
+        const text = (Array.isArray(data) ? data[0].generated_text : data.generated_text) || '';
+        cards = text.split(/\n/).map(line => line.trim()).filter(Boolean);
+        index = 0;
+        showCard(index);
+      } catch (e) {
+        console.error(e);
+        flashcardEl.textContent = 'Error generating flashcards. Try again.';
       } finally {
-        askBtn.disabled = false;
+        generateBtn.disabled = false;
       }
     }
 
-    form.onsubmit = e => {
-      e.preventDefault();
-      const q = questionInput.value.trim();
-      if (!q) return;
-      askAI(q);
-      questionInput.value = '';
-    };
+    generateBtn.onclick = generateCards;
+    prevBtn.onclick = () => { if (index>0) showCard(--index); };
+    nextBtn.onclick = () => { if (index<cards.length-1) showCard(++index); };
   </script>
 </body>
 </html>
+
