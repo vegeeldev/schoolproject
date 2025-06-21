@@ -60,7 +60,8 @@
       
       try {
         // Use HuggingFace Inference API with a working model
-        const res = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
+        // In the askAI function, replace the fetch URL with:
+        const res = await fetch('https://api-inference.huggingface.co/models/facebook/blenderbot-400M-distill', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ inputs: question })
@@ -69,8 +70,17 @@
         let data = await res.json();
         chat.removeChild(chat.lastChild); // Remove 'Thinking...'
         
-        if (data.error || !data[0] || !data[0].generated_text) {
-          addMsg('Sorry, AI is busy or unavailable. Try again later.', 'ai');
+        // Replace the error handling section with:
+        if (data.error) {
+          if (data.error.includes('loading')) {
+            addMsg('AI model is loading. Please wait a moment and try again.', 'ai');
+          } else if (data.error.includes('rate')) {
+            addMsg('Too many requests. Please wait a moment before asking again.', 'ai');
+          } else {
+            addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
+          }
+        } else if (!data[0] || !data[0].generated_text) {
+          addMsg('No response received. Please try rephrasing your question.', 'ai');
         } else {
           addMsg(data[0].generated_text.trim(), 'ai');
         }
