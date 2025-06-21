@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Buddy - AI Q&A & Notes</title>
+  <style>
+    body { font-family: sans-serif; background: #f7f7fa; margin: 0; padding: 0; }
+    .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 24px; }
+    h1 { font-size: 1.5em; margin-bottom: 0.5em; }
+    #chat { height: 220px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 10px; background: #fafbfc; margin-bottom: 1em; }
+    .msg { margin-bottom: 10px; }
+    .msg.user { color: #1a73e8; }
+    .msg.ai { color: #222; }
+    #question { width: 80%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; }
+    #ask { padding: 8px 16px; border: none; background: #1a73e8; color: #fff; border-radius: 4px; cursor: pointer; }
+    #ask:disabled { background: #aaa; }
+    #notes { width: 100%; min-height: 80px; border-radius: 4px; border: 1px solid #ddd; margin-top: 1em; padding: 8px; }
+    .notes-label { margin-top: 1.5em; font-weight: bold; }
+    .footer { text-align: center; color: #888; font-size: 0.9em; margin-top: 2em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Study Buddy 🤖</h1>
+    <div id="chat"></div>
+    <form id="chatForm" autocomplete="off">
+      <input id="question" type="text" placeholder="Ask a study question..." required />
+      <button id="ask" type="submit">Ask</button>
+    </form>
+    <div class="notes-label">Your Notes</div>
+    <textarea id="notes" placeholder="Write your notes here..."></textarea>
+    <div class="footer">Powered by <a href="https://huggingface.co/blog/open-assistant-oasst1" target="_blank">OpenAssistant</a> | Notes saved locally</div>
+  </div>
+  <script>
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('chatForm');
+    const questionInput = document.getElementById('question');
+    const askBtn = document.getElementById('ask');
+    const notes = document.getElementById('notes');
+    // Load notes from localStorage
+    notes.value = localStorage.getItem('study_notes') || '';
+    notes.addEventListener('input', () => {
+      localStorage.setItem('study_notes', notes.value);
+    });
+    function addMsg(text, who) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + who;
+      div.textContent = (who === 'user' ? 'You: ' : 'AI: ') + text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    async function askAI(question) {
+      addMsg(question, 'user');
+      askBtn.disabled = true;
+      addMsg('Thinking...', 'ai');
+      // Use HuggingFace Inference API for OpenAssistant (no key needed, rate-limited)
+      const res = await fetch('https://api-inference.huggingface.co/models/OpenAssistant/oasst-sft-1-pythia-12b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: question })
+      });
+      let data = await res.json();
+      chat.removeChild(chat.lastChild); // Remove 'Thinking...'
+      if (data.error || !data[0] || !data[0].generated_text) {
+        addMsg('Sorry, AI is busy or unavailable. Try again later.', 'ai');
+      } else {
+        addMsg(data[0].generated_text.trim(), 'ai');
+      }
+      askBtn.disabled = false;
+    }
+    form.onsubmit = e => {
+      e.preventDefault();
+      const q = questionInput.value.trim();
+      if (!q) return;
+      askAI(q);
+      questionInput.value = '';
+    };
+  </script>
+</body>
+</html>
