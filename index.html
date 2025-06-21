@@ -1,8 +1,55 @@
+// File: pages/api/ask.js
+import fetch from 'node-fetch';
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const { question } = req.body;
+  if (!question) {
+    return res.status(400).json({ error: 'No question provided' });
+  }
+
+  try {
+    const hfRes = await fetch(
+      'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer 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`,
+        },
+        body: JSON.stringify({
+          inputs: `[INST] ${question} [/INST]`,
+          parameters: { max_new_tokens: 500, temperature: 0.7, top_p: 0.95, return_full_text: false },
+          wait_for_model: true,
+        }),
+      }
+    );
+
+    if (!hfRes.ok) {
+      const text = await hfRes.text();
+      return res
+        .status(hfRes.status)
+        .json({ error: `HuggingFace error (${hfRes.status}): ${text}` });
+    }
+
+    const data = await hfRes.json();
+    return res.status(200).json(data);
+  } catch (e) {
+    console.error('API /ask error:', e);
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+
+<!-- File: public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Study Buddy - AI Q&A & Notes</title>
   <style>
     body { font-family: sans-serif; background: #f7f7fa; margin: 0; padding: 0; }
@@ -30,7 +77,7 @@
     </form>
     <div class="notes-label">Your Notes</div>
     <textarea id="notes" placeholder="Write your notes here..."></textarea>
-    <div class="footer">Powered by <a href="https://huggingface.co" target="_blank">HuggingFace</a> | Notes saved locally</div>
+    <div class="footer">Powered by HuggingFace via your secure backend | Notes saved locally</div>
   </div>
   <script>
     const chat = document.getElementById('chat');
@@ -59,22 +106,10 @@
       askBtn.disabled = true;
       const spinner = addMsg('Thinking...', 'ai');
       try {
-        const res = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
+        const res = await fetch('/api/ask', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer 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'
-          },
-          body: JSON.stringify({
-            inputs: `[INST] ${question} [/INST]`,
-            parameters: {
-              max_new_tokens: 500,
-              temperature: 0.7,
-              top_p: 0.95,
-              return_full_text: false
-            },
-            wait_for_model: true
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -86,9 +121,7 @@
           else if (err.match(/\brate\s*limit\b/) || res.status === 429) addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
           else addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
         } else {
-          let text;
-          if (Array.isArray(data) && data[0]?.generated_text) text = data[0].generated_text;
-          else if (data.generated_text) text = data.generated_text;
+          const text = (Array.isArray(data) ? data[0]?.generated_text : data.generated_text) || '';
           if (!text) addMsg('No response received. Please try rephrasing your question.', 'ai');
           else addMsg(text.trim(), 'ai');
         }
