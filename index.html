@@ -59,18 +59,15 @@
       addMsg('Thinking...', 'ai');
       
       try {
-        // Use HuggingFace Inference API with OpenAssistant model
-        const res = await fetch('https://api-inference.huggingface.co/models/OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5', {
+        // Use HuggingFace Inference API with a smaller, more reliable model
+        const res = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-small', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            inputs: {
-              text: question,
-              max_new_tokens: 250,
-              temperature: 0.7
-            }
+            inputs: question,
+            wait_for_model: true
           })
         });
         
@@ -79,9 +76,9 @@
         
         if (data.error) {
           if (data.error.includes('loading')) {
-            addMsg('Model is warming up, please try again in 10-20 seconds...', 'ai');
+            addMsg('Model is starting up, please try again in 10 seconds...', 'ai');
           } else if (data.error.includes('rate')) {
-            addMsg('Rate limit exceeded. Please wait a moment before trying again.', 'ai');
+            addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
           } else {
             addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
           }
