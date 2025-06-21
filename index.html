@@ -51,19 +51,19 @@
       div.textContent = (who === 'user' ? 'You: ' : 'AI: ') + text;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
+      return div;
     }
     
     async function askAI(question) {
       addMsg(question, 'user');
       askBtn.disabled = true;
-      addMsg('Thinking...', 'ai');
-      
+      const spinner = addMsg('Thinking...', 'ai');
       try {
         const res = await fetch('https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer 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'
+            'Authorization': 'Bearer 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' // TODO: move token to secure backend
           },
           body: JSON.stringify({
             inputs: `[INST] ${question} [/INST]`,
@@ -76,29 +76,41 @@
             wait_for_model: true
           })
         });
-        
-        let data = await res.json();
-        chat.removeChild(chat.lastChild); // Remove 'Thinking...'
-        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (spinner.parentNode) spinner.remove();
+
         if (data.error) {
-          if (data.error.includes('loading')) {
+          const errMsg = data.error.toLowerCase();
+          if (errMsg.includes('loading')) {
             addMsg('Model is starting up, please try again in 10 seconds...', 'ai');
-          } else if (data.error.includes('rate')) {
+          } else if (errMsg.match(/\brate\s*limit\b/) || res.status === 429) {
             addMsg('Too many requests. Please wait a moment before trying again.', 'ai');
           } else {
             addMsg('AI service temporarily unavailable. Please try again later.', 'ai');
           }
-        } else if (!data[0] || !data[0].generated_text) {
-          addMsg('No response received. Please try rephrasing your question.', 'ai');
         } else {
-          addMsg(data[0].generated_text.trim(), 'ai');
+          let text;
+          if (Array.isArray(data) && data[0]?.generated_text) {
+            text = data[0].generated_text;
+          } else if (data.generated_text) {
+            text = data.generated_text;
+          }
+          if (!text) {
+            addMsg('No response received. Please try rephrasing your question.', 'ai');
+          } else {
+            addMsg(text.trim(), 'ai');
+          }
         }
       } catch (error) {
-        chat.removeChild(chat.lastChild); // Remove 'Thinking...'
-        addMsg('Sorry, there was an error connecting to the AI. Please try again.', 'ai');
+        console.error(error);
+        if (spinner.parentNode) spinner.remove();
+        addMsg('Sorry, there was an error connecting to the AI. Please try again later.', 'ai');
+      } finally {
+        askBtn.disabled = false;
       }
-      
-      askBtn.disabled = false;
     }
     
     form.onsubmit = e => {
