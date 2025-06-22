@@ -1,5 +1,4 @@
 // File: pages/index.js
-"use client";
 import { useState, useEffect } from 'react';
 import Script from 'next/script';
 
@@ -70,11 +69,14 @@ export default function UniFlash() {
     <>
       <Script
         src="https://cdn.jsdelivr.net/npm/gpt4all@latest/dist/gpt4all.min.js"
-        strategy="beforeInteractive"
-        onLoad={() => setScriptLoaded(true)}
+        strategy="afterInteractive"
+        onLoad={() => {
+          setScriptLoaded(true);
+        }}
         onError={(e) => {
           console.error('Script load error:', e);
           setStatus('Failed to load AI script.');
+          setBusy(false);
         }}
       />
       <div className="container">
@@ -125,3 +127,4 @@ export default function UniFlash() {
     </>
   );
 }
+
