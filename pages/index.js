@@ -27,19 +27,20 @@ export default function UniFlash() {
     }
   }, [notes]);
 
-  // Initialize GPT4All-J after script loads
+  // Initialize GPT4All-J after script loads and model binary is available
   useEffect(() => {
     if (!scriptLoaded) return;
     (async () => {
       setStatus('Initializing model...');
       try {
-        const m = new window.GPT4All({ model: 'gpt4all-lora-quantized' });
+        // Ensure you've placed the quantized model binary at /public/models/gpt4all-lora-quantized.bin
+        const m = new window.GPT4All({ model: '/models/gpt4all-lora-quantized.bin' });
         await m.load();
         setModel(m);
         setStatus('Model loaded — ready!');
       } catch (e) {
         console.error('Model load error:', e);
-        setStatus('Error loading model.');
+        setStatus('Error loading model; check model path and network.');
       } finally {
         setBusy(false);
       }
@@ -54,11 +55,12 @@ export default function UniFlash() {
     try {
       const prompt = `${action} on '${topic}' for undergraduate students in Nigerian tertiary institutions.`;
       const resp = await model.chat(prompt);
-      const text = resp.generated_text ?? resp.text ?? String(resp);
+      // GPT4All-J returns an object with `text` property
+      const text = resp.text ?? String(resp);
       setResult(text.trim());
     } catch (err) {
       console.error('Generation error:', err);
-      setResult('Error generating content.');
+      setResult('Error generating content; see console for details.');
     } finally {
       setStatus('Model loaded — ready!');
       setBusy(false);
@@ -70,9 +72,7 @@ export default function UniFlash() {
       <Script
         src="https://cdn.jsdelivr.net/npm/gpt4all@latest/dist/gpt4all.min.js"
         strategy="afterInteractive"
-        onLoad={() => {
-          setScriptLoaded(true);
-        }}
+        onLoad={() => setScriptLoaded(true)}
         onError={(e) => {
           console.error('Script load error:', e);
           setStatus('Failed to load AI script.');
@@ -107,7 +107,7 @@ export default function UniFlash() {
           onChange={e => setNotes(e.target.value)}
         />
 
-        <div className="footer">Offline AI via GPT4All-J | Designed for Nigerian tertiary curricula</div>
+        <div className="footer">Offline AI via GPT4All-J | Model hosted at /models/gpt4all-lora-quantized.bin</div>
       </div>
 
       <style jsx>{`
@@ -127,4 +127,3 @@ export default function UniFlash() {
     </>
   );
 }
-
