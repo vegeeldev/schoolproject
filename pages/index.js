@@ -1,6 +1,6 @@
+// File: pages/index.js
 "use client";
 import { useState, useEffect } from 'react';
-import Script from 'next/script';
 
 export default function UniFlash() {
   const [model, setModel] = useState(null);
@@ -10,14 +10,11 @@ export default function UniFlash() {
   const [notes, setNotes] = useState('');
   const [result, setResult] = useState('');
   const [busy, setBusy] = useState(true);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Load saved notes on client
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('uniflash_notes');
-      if (saved) setNotes(saved);
-    }
+    const saved = typeof window !== 'undefined' && localStorage.getItem('uniflash_notes');
+    if (saved) setNotes(saved);
   }, []);
 
   // Persist notes
@@ -27,13 +24,15 @@ export default function UniFlash() {
     }
   }, [notes]);
 
-  // Initialize model after script is loaded
+  // Initialize model on mount
   useEffect(() => {
-    if (!scriptLoaded) return;
     async function initModel() {
       setStatus('Loading model...');
+      setBusy(true);
       try {
-        const m = new window.GPT4All({ model: 'gpt4all-lora-quantized' });
+        // Dynamically import GPT4All-J
+        const { GPT4All } = await import('https://cdn.jsdelivr.net/npm/gpt4all@latest/dist/gpt4all.min.js');
+        const m = new GPT4All({ model: 'gpt4all-lora-quantized' });
         await m.load();
         setModel(m);
         setStatus('Model loaded — ready!');
@@ -45,7 +44,7 @@ export default function UniFlash() {
       }
     }
     initModel();
-  }, [scriptLoaded]);
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic.trim() || !model) return;
@@ -67,44 +66,36 @@ export default function UniFlash() {
   };
 
   return (
-    <>
-      <Script
-        src="https://cdn.jsdelivr.net/npm/gpt4all@latest/dist/gpt4all.min.js"
-        strategy="beforeInteractive"
-        onLoad={() => setScriptLoaded(true)}
-        onError={(e) => {
-          console.error('Script load error:', e);
-          setStatus('Failed to load AI script.');
-          setBusy(true);
-        }}
-      />
-      <div className="container">
-        <h1>UniFlash 🎓</h1>
-        <div className="controls">
-          <select value={action} onChange={e => setAction(e.target.value)}>
-            <option value="Generate summary">Generate Summary</option>
-            <option value="Create flashcards">Create Flashcards</option>
-            <option value="Make MCQs">Make MCQs</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Enter course topic or lecture title"
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-          />
-          <button onClick={handleGenerate} disabled={busy}>Go</button>
-        </div>
-        <div id="status">{status}</div>
-        <div id="result">{result}</div>
-        <label className="notes-label" htmlFor="notes">Your Notes</label>
-        <textarea
-          id="notes"
-          placeholder="Save your personal notes..."
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
+    <div className="container">
+      <h1>UniFlash 🎓</h1>
+      <div className="controls">
+        <select value={action} onChange={e => setAction(e.target.value)}>
+          <option value="Generate summary">Generate Summary</option>
+          <option value="Create flashcards">Create Flashcards</option>
+          <option value="Make MCQs">Make MCQs</option>
+        </select>
+        <input
+          type="text"
+          placeholder="Enter course topic or lecture title"
+          value={topic}
+          onChange={e => setTopic(e.target.value)}
         />
-        <div className="footer">Offline AI via GPT4All-J | Designed for Nigerian tertiary curricula</div>
+        <button onClick={handleGenerate} disabled={busy}>Go</button>
       </div>
+
+      <div id="status">{status}</div>
+      <div id="result">{result}</div>
+
+      <label className="notes-label" htmlFor="notes">Your Notes</label>
+      <textarea
+        id="notes"
+        placeholder="Save your personal notes..."
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+      />
+
+      <div className="footer">Offline AI via GPT4All-J | Designed for Nigerian tertiary curricula</div>
+
       <style jsx>{`
         .container { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 32px; font-family: sans-serif; }
         h1 { text-align: center; margin-bottom: 1em; font-size: 2em; }
@@ -119,6 +110,6 @@ export default function UniFlash() {
         textarea { width: 100%; min-height: 100px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; }
         .footer { text-align: center; color: #555; font-size: 0.9em; margin-top: 2em; }
       `}</style>
-    </>
+    </div>
   );
 }
